@@ -17,6 +17,12 @@ defmodule TenantPlug.Sources.FromHeader do
 
       # With custom mapper
       {:ok, %{id: "acme", source: "header"}, %{source: :header, raw: "acme"}}
+
+      # No header present
+      {:error, :not_found}
+
+      # Header present but empty
+      {:error, :empty_header}
   """
 
   @behaviour TenantPlug.Sources.Behaviour
@@ -30,12 +36,13 @@ defmodule TenantPlug.Sources.FromHeader do
 
     case get_raw_header_value(conn, header_name) do
       nil ->
-        :error
+        {:error, :not_found}
 
       raw_value ->
         trimmed_value = String.trim(raw_value)
+
         if trimmed_value == "" do
-          :error
+          {:error, :empty_header}
         else
           tenant = apply_mapper(trimmed_value, mapper)
           {:ok, tenant, %{source: :header, raw: raw_value}}

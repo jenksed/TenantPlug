@@ -28,6 +28,13 @@ defmodule TenantPlug.Sources.FromJWT do
         claim: "org_id",
         verifier: &MyApp.JWT.verify/1
       }
+
+      # Error cases
+      {:error, :missing_header}     # No authorization header
+      {:error, :invalid_token}      # Token not in "Bearer <token>" format
+      {:error, :malformed_jwt}      # JWT cannot be decoded
+      {:error, :missing_claim}      # JWT valid but claim not present
+      {:error, :no_verifier}        # No verifier function provided
   """
 
   @behaviour TenantPlug.Sources.Behaviour
@@ -46,7 +53,7 @@ defmodule TenantPlug.Sources.FromJWT do
          {:ok, tenant} <- extract_claim(claims, claim) do
       {:ok, tenant, %{source: :jwt, claim: claim}}
     else
-      _error -> :error
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -54,11 +61,21 @@ defmodule TenantPlug.Sources.FromJWT do
     case Plug.Conn.get_req_header(conn, String.downcase(header_name)) do
       [auth_header | _] ->
         case String.split(auth_header, " ", parts: 2) do
-          [scheme, token] when scheme in ["Bearer", "bearer"] -> 
-            {:ok, String.trim(token)}
-          _ -> :error
+          [scheme, token] when scheme in ["Bearer", "bearer"] ->
+            trimmed_token = String.trim(token)
+
+            if trimmed_token == "" do
+              {:error, :empty_token}
+            else
+              {:ok, trimmed_token}
+            end
+
+          _ ->
+            {:error, :invalid_token}
         end
-      _ -> :error
+
+      _ ->
+        {:error, :missing_header}
     end
   end
 
@@ -66,7 +83,11 @@ defmodule TenantPlug.Sources.FromJWT do
 
   defp verify_token(token, verifier) when is_function(verifier, 1) do
     try do
-      verifier.(token)
+      case verifier.(token) do
+        {:ok, claims} -> {:ok, claims}
+        {:error, reason} -> {:error, reason}
+        _other -> {:error, :malformed_jwt}
+      end
     rescue
       _ -> {:error, :verifier_exception}
     end
@@ -74,7 +95,11 @@ defmodule TenantPlug.Sources.FromJWT do
 
   defp verify_token(token, module) when is_atom(module) do
     try do
-      module.verify(token)
+      case module.verify(token) do
+        {:ok, claims} -> {:ok, claims}
+        {:error, reason} -> {:error, reason}
+        _other -> {:error, :malformed_jwt}
+      end
     rescue
       _ -> {:error, :verifier_exception}
     end
@@ -84,10 +109,10 @@ defmodule TenantPlug.Sources.FromJWT do
 
   defp extract_claim(claims, claim) when is_map(claims) do
     case Map.get(claims, claim) || Map.get(claims, String.to_atom(claim)) do
-      nil -> :error
+      nil -> {:error, :missing_claim}
       value -> {:ok, value}
     end
   end
 
-  defp extract_claim(_claims, _claim), do: :error
+  defp extract_claim(_claims, _claim), do: {:error, :invalid_claims}
 end

@@ -16,7 +16,13 @@ defmodule TenantPlug.Sources.FromSubdomain do
       {:ok, "acme", %{source: :subdomain, raw: "acme.myapp.com"}}
 
       # For request to "www.myapp.com" with exclude_subdomains: ["www"]
-      :error
+      {:error, :excluded_subdomain}
+
+      # For request to "192.168.1.1" (IP address)
+      {:error, :ip_address}
+
+      # For request to "myapp.com" (no subdomain)
+      {:error, :no_subdomain}
   """
 
   @behaviour TenantPlug.Sources.Behaviour
@@ -28,18 +34,21 @@ defmodule TenantPlug.Sources.FromSubdomain do
 
     case get_host(conn) do
       nil ->
-        :error
+        {:error, :not_found}
 
       host ->
-        host
-        |> extract_subdomain(host_split_index)
-        |> validate_subdomain(exclude_subdomains)
-        |> case do
+        case extract_subdomain(host, host_split_index) do
           {:ok, subdomain} ->
-            {:ok, subdomain, %{source: :subdomain, raw: host}}
+            case validate_subdomain(subdomain, exclude_subdomains) do
+              {:ok, subdomain} ->
+                {:ok, subdomain, %{source: :subdomain, raw: host}}
 
-          :error ->
-            :error
+              {:error, reason} ->
+                {:error, reason}
+            end
+
+          {:error, reason} ->
+            {:error, reason}
         end
     end
   end
@@ -47,28 +56,32 @@ defmodule TenantPlug.Sources.FromSubdomain do
   defp get_host(conn) do
     # Try conn.host first (set by Plug.Conn), then fall back to host header
     case conn.host do
-      nil -> 
+      nil ->
         case Plug.Conn.get_req_header(conn, "host") do
           [host | _] -> host
           [] -> nil
         end
-      host -> host
+
+      host ->
+        host
     end
   end
 
   defp extract_subdomain(host, index) when is_binary(host) do
     # Check if it's an IP address (simple check for digits and dots)
     if is_ip_address?(host) do
-      :error
+      {:error, :ip_address}
     else
       parts = String.split(host, ".")
 
       case {index >= 0, Enum.at(parts, index)} do
-        {false, _} -> :error  # Negative index not supported
-        {true, nil} -> :error
-        {true, ""} -> :error
-        {true, subdomain} when length(parts) >= 3 -> {:ok, subdomain}  # Need at least 3 parts for subdomain
-        {true, _} -> :error
+        # Negative index not supported
+        {false, _} -> {:error, :invalid_index}
+        {true, nil} -> {:error, :no_subdomain}
+        {true, ""} -> {:error, :empty_subdomain}
+        # Need at least 3 parts for subdomain
+        {true, subdomain} when length(parts) >= 3 -> {:ok, subdomain}
+        {true, _} -> {:error, :no_subdomain}
       end
     end
   end
@@ -86,13 +99,11 @@ defmodule TenantPlug.Sources.FromSubdomain do
     end
   end
 
-  defp validate_subdomain({:ok, subdomain}, exclude_list) do
+  defp validate_subdomain(subdomain, exclude_list) do
     if subdomain in exclude_list do
-      :error
+      {:error, :excluded_subdomain}
     else
       {:ok, subdomain}
     end
   end
-
-  defp validate_subdomain(:error, _exclude_list), do: :error
 end

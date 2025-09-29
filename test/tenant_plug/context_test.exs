@@ -12,7 +12,8 @@ defmodule TenantPlug.ContextTest do
     test "stores and retrieves tenant with custom key" do
       Context.put("test-tenant", :custom_key)
       assert Context.current(:custom_key) == "test-tenant"
-      assert Context.current() == nil  # Default key should be empty
+      # Default key should be empty
+      assert Context.current() == nil
     end
 
     test "supports different tenant types" do
@@ -94,17 +95,18 @@ defmodule TenantPlug.ContextTest do
   describe "apply_snapshot/1" do
     test "applies valid snapshot" do
       snapshot = %{tenant: "test-tenant", key: :tenant_plug_tenant}
-      
+
       assert Context.apply_snapshot(snapshot) == :ok
       assert Context.current() == "test-tenant"
     end
 
     test "applies snapshot with custom key" do
       snapshot = %{tenant: "test-tenant", key: :custom_key}
-      
+
       assert Context.apply_snapshot(snapshot) == :ok
       assert Context.current(:custom_key) == "test-tenant"
-      assert Context.current() == nil  # Default key should be empty
+      # Default key should be empty
+      assert Context.current() == nil
     end
 
     test "handles nil snapshot gracefully" do
@@ -130,17 +132,18 @@ defmodule TenantPlug.ContextTest do
       parent_pid = self()
       Context.put("parent-tenant")
 
-      task = Task.async(fn ->
-        # Child process should not see parent's tenant
-        assert Context.current() == nil
-        
-        # Set tenant in child process
-        Context.put("child-tenant")
-        assert Context.current() == "child-tenant"
-        
-        # Send confirmation to parent
-        send(parent_pid, :child_done)
-      end)
+      task =
+        Task.async(fn ->
+          # Child process should not see parent's tenant
+          assert Context.current() == nil
+
+          # Set tenant in child process
+          Context.put("child-tenant")
+          assert Context.current() == "child-tenant"
+
+          # Send confirmation to parent
+          send(parent_pid, :child_done)
+        end)
 
       # Wait for child to complete
       receive do
@@ -159,15 +162,16 @@ defmodule TenantPlug.ContextTest do
       Context.put("parent-tenant")
       snapshot = Context.snapshot()
 
-      task = Task.async(fn ->
-        # Apply snapshot in child process
-        Context.apply_snapshot(snapshot)
-        Context.current()
-      end)
+      task =
+        Task.async(fn ->
+          # Apply snapshot in child process
+          Context.apply_snapshot(snapshot)
+          Context.current()
+        end)
 
       child_tenant = Task.await(task)
       assert child_tenant == "parent-tenant"
-      
+
       # Parent should still have its tenant
       assert Context.current() == "parent-tenant"
     end

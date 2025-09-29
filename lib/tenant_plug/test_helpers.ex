@@ -166,7 +166,7 @@ defmodule TenantPlug.TestHelpers do
       ...> end)
       :ok
   """
-  @spec with_tenant(any(), (() -> any()), keyword()) :: any()
+  @spec with_tenant(any(), (-> any()), keyword()) :: any()
   def with_tenant(tenant, fun, opts \\ []) when is_function(fun, 0) do
     key = Keyword.get(opts, :key, :tenant_plug_tenant)
     previous_tenant = Context.current(key)

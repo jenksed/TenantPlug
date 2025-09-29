@@ -21,7 +21,13 @@ defmodule TenantPlug.TelemetryTest do
 
     test "sanitizes metadata by removing sensitive fields" do
       tenant = "test_tenant"
-      metadata = %{source: :header, raw: "test_tenant", sensitive_data: "secret", request_path: "/api/users"}
+
+      metadata = %{
+        source: :header,
+        raw: "test_tenant",
+        sensitive_data: "secret",
+        request_path: "/api/users"
+      }
 
       ref = :telemetry_test.attach_event_handlers(self(), [[:tenant_plug, :tenant, :resolved]])
 
@@ -51,7 +57,8 @@ defmodule TenantPlug.TelemetryTest do
     test "emits exception event for module source" do
       exception = %RuntimeError{message: "Test error"}
 
-      ref = :telemetry_test.attach_event_handlers(self(), [[:tenant_plug, :error, :source_exception]])
+      ref =
+        :telemetry_test.attach_event_handlers(self(), [[:tenant_plug, :error, :source_exception]])
 
       assert Telemetry.emit_source_exception(MySource, exception) == :ok
 
@@ -63,7 +70,8 @@ defmodule TenantPlug.TelemetryTest do
     test "emits exception event for tuple source config" do
       exception = %RuntimeError{message: "Config error"}
 
-      ref = :telemetry_test.attach_event_handlers(self(), [[:tenant_plug, :error, :source_exception]])
+      ref =
+        :telemetry_test.attach_event_handlers(self(), [[:tenant_plug, :error, :source_exception]])
 
       assert Telemetry.emit_source_exception({MySource, %{option: "value"}}, exception) == :ok
 
@@ -79,7 +87,8 @@ defmodule TenantPlug.TelemetryTest do
 
       exception = %RuntimeError{message: "Dev error"}
 
-      ref = :telemetry_test.attach_event_handlers(self(), [[:tenant_plug, :error, :source_exception]])
+      ref =
+        :telemetry_test.attach_event_handlers(self(), [[:tenant_plug, :error, :source_exception]])
 
       assert Telemetry.emit_source_exception(MySource, exception) == :ok
 
@@ -97,7 +106,8 @@ defmodule TenantPlug.TelemetryTest do
 
       exception = %RuntimeError{message: "Test error"}
 
-      ref = :telemetry_test.attach_event_handlers(self(), [[:tenant_plug, :error, :source_exception]])
+      ref =
+        :telemetry_test.attach_event_handlers(self(), [[:tenant_plug, :error, :source_exception]])
 
       assert Telemetry.emit_source_exception(MySource, exception) == :ok
 

@@ -1,5 +1,6 @@
 defmodule TenantPlug.LoggerTest do
-  use ExUnit.Case, async: false  # Logger metadata is global
+  # Logger metadata is global
+  use ExUnit.Case, async: false
   require Logger
 
   alias TenantPlug.Logger, as: TenantLogger

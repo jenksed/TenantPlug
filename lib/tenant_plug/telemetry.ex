@@ -36,6 +36,16 @@ defmodule TenantPlug.Telemetry do
     * `:reason` - Exception reason
     * `:stacktrace` - Exception stacktrace (in development only)
 
+  ### `[:tenant_plug, :error, :source_error]`
+
+  Emitted when a source returns an error during extraction.
+
+  Measurements: `%{}`
+  Metadata:
+    * `:module` - Source module that returned error
+    * `:reason` - Error reason (e.g., :not_found, :malformed_jwt)
+    * `:source_config` - Source configuration used
+
   ## Example Handler
 
       :telemetry.attach(
@@ -89,6 +99,33 @@ defmodule TenantPlug.Telemetry do
       [:tenant_plug, :tenant, :cleared],
       %{},
       %{tenant_snapshot: tenant}
+    )
+
+    :ok
+  end
+
+  @doc """
+  Emits a source error event.
+
+  ## Examples
+
+      iex> TenantPlug.Telemetry.emit_source_error(MySource, :not_found)
+      :ok
+  """
+  @spec emit_source_error(module() | {module(), map()}, term()) :: :ok
+  def emit_source_error(source_config, reason) do
+    module = extract_module(source_config)
+
+    metadata = %{
+      module: module,
+      reason: reason,
+      source_config: source_config
+    }
+
+    :telemetry.execute(
+      [:tenant_plug, :error, :source_error],
+      %{},
+      metadata
     )
 
     :ok

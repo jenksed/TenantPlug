@@ -53,8 +53,10 @@ defmodule TenantPlug do
   """
 
   alias TenantPlug.Context
-  alias TenantPlug.Logger
+  alias TenantPlug.Logger, as: TenantLogger
   alias TenantPlug.Telemetry
+
+  require Logger
 
   @behaviour Plug
 
@@ -90,7 +92,7 @@ defmodule TenantPlug do
         Context.put(tenant, opts.key)
 
         if opts.logger_metadata do
-          Logger.attach_metadata(tenant, opts)
+          TenantLogger.attach_metadata(tenant, opts)
         end
 
         if opts.telemetry do
@@ -100,8 +102,8 @@ defmodule TenantPlug do
         conn
         |> register_cleanup(opts)
 
-      :error ->
-        handle_missing_tenant(conn, opts)
+      {:error, error_details} ->
+        handle_missing_tenant(conn, opts, error_details)
     end
   end
 
@@ -162,22 +164,57 @@ defmodule TenantPlug do
   # Private functions
 
   defp resolve_tenant(conn, opts) do
-    Enum.reduce_while(opts.sources, :error, fn source_config, _acc ->
-      try do
-        case extract_from_source(conn, source_config) do
-          {:ok, tenant, metadata} -> {:halt, {:ok, tenant, metadata}}
-          :error -> {:cont, :error}
-        end
-      rescue
-        exception ->
-          if opts.telemetry do
-            Telemetry.emit_source_exception(source_config, exception)
-          end
+    result =
+      Enum.reduce_while(opts.sources, [], fn source_config, error_list ->
+        try do
+          case extract_from_source(conn, source_config) do
+            {:ok, tenant, metadata} ->
+              {:halt, {:ok, tenant, metadata}}
 
-          {:cont, :error}
-      end
-    end)
+            {:error, reason} ->
+              source_name = extract_source_name(source_config)
+              error_detail = %{source: source_name, reason: reason}
+
+              if opts.telemetry do
+                Telemetry.emit_source_error(source_config, reason)
+              end
+
+              {:cont, [error_detail | error_list]}
+
+            :error ->
+              # Handle legacy sources that still return :error
+              source_name = extract_source_name(source_config)
+              error_detail = %{source: source_name, reason: :not_found}
+
+              if opts.telemetry do
+                Telemetry.emit_source_error(source_config, :not_found)
+              end
+
+              {:cont, [error_detail | error_list]}
+          end
+        rescue
+          exception ->
+            source_name = extract_source_name(source_config)
+            error_detail = %{source: source_name, reason: :exception, exception: exception}
+
+            if opts.telemetry do
+              Telemetry.emit_source_exception(source_config, exception)
+            end
+
+            {:cont, [error_detail | error_list]}
+        end
+      end)
+
+    case result do
+      {:ok, tenant, metadata} -> {:ok, tenant, metadata}
+      error_list when is_list(error_list) -> {:error, Enum.reverse(error_list)}
+      other -> {:error, [%{source: :unknown, reason: :unexpected_result, result: other}]}
+    end
   end
+
+  defp extract_source_name({module, _opts}) when is_atom(module), do: module
+  defp extract_source_name(module) when is_atom(module), do: module
+  defp extract_source_name(_invalid), do: :unknown_source
 
   defp extract_from_source(conn, {module, source_opts}) do
     module.extract(conn, source_opts)
@@ -187,17 +224,27 @@ defmodule TenantPlug do
     module.extract(conn, %{})
   end
 
-  defp handle_missing_tenant(conn, %{require_resolved: false}), do: conn
+  defp handle_missing_tenant(conn, %{require_resolved: false}, _error_details), do: conn
 
-  defp handle_missing_tenant(conn, %{require_resolved: true, on_missing: nil}) do
+  defp handle_missing_tenant(conn, %{require_resolved: true, on_missing: nil}, error_details) do
+    # Log error details for debugging
+    Logger.debug(
+      "Tenant resolution failed: #{inspect(error_details)} for path: #{conn.request_path}"
+    )
+
     conn
     |> Plug.Conn.send_resp(403, "Tenant required")
     |> Plug.Conn.halt()
   end
 
-  defp handle_missing_tenant(conn, %{require_resolved: true, on_missing: handler})
+  defp handle_missing_tenant(conn, %{require_resolved: true, on_missing: handler}, _error_details)
        when is_function(handler, 1) do
     handler.(conn)
+  end
+
+  defp handle_missing_tenant(conn, %{require_resolved: true, on_missing: handler}, error_details)
+       when is_function(handler, 2) do
+    handler.(conn, error_details)
   end
 
   defp register_cleanup(conn, opts) do
@@ -205,7 +252,7 @@ defmodule TenantPlug do
       Context.delete(opts.key)
 
       if opts.logger_metadata do
-        Logger.clear_metadata()
+        TenantLogger.clear_metadata()
       end
 
       if opts.telemetry do

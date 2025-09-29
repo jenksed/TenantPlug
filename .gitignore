@@ -21,3 +21,6 @@ tenant_plug-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Claude Code development guide
+CLAUDE.md

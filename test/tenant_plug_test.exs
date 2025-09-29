@@ -25,14 +25,15 @@ defmodule TenantPlugTest do
     end
 
     test "accepts custom configuration" do
-      opts = TenantPlug.init(
-        sources: [TenantPlug.Sources.FromHeader],
-        key: :custom_key,
-        logger_metadata: false,
-        telemetry: false,
-        require_resolved: true,
-        on_missing: &halt_with_error/1
-      )
+      opts =
+        TenantPlug.init(
+          sources: [TenantPlug.Sources.FromHeader],
+          key: :custom_key,
+          logger_metadata: false,
+          telemetry: false,
+          require_resolved: true,
+          on_missing: &halt_with_error/1
+        )
 
       assert opts.sources == [TenantPlug.Sources.FromHeader]
       assert opts.key == :custom_key
@@ -59,12 +60,15 @@ defmodule TenantPlugTest do
     test "tries sources in order until one succeeds" do
       conn = %Plug.Conn{conn(:get, "/") | host: "acme.example.com"}
 
-      opts = TenantPlug.init(
-        sources: [
-          TenantPlug.Sources.FromHeader,  # Will fail - no header
-          TenantPlug.Sources.FromSubdomain  # Will succeed
-        ]
-      )
+      opts =
+        TenantPlug.init(
+          sources: [
+            # Will fail - no header
+            TenantPlug.Sources.FromHeader,
+            # Will succeed
+            TenantPlug.Sources.FromSubdomain
+          ]
+        )
 
       TenantPlug.call(conn, opts)
       assert TenantPlug.current() == "acme"
@@ -82,10 +86,12 @@ defmodule TenantPlugTest do
 
     test "halts connection when require_resolved is true and no tenant found" do
       conn = conn(:get, "/")
-      opts = TenantPlug.init(
-        sources: [TenantPlug.Sources.FromHeader],
-        require_resolved: true
-      )
+
+      opts =
+        TenantPlug.init(
+          sources: [TenantPlug.Sources.FromHeader],
+          require_resolved: true
+        )
 
       result_conn = TenantPlug.call(conn, opts)
 
@@ -95,18 +101,19 @@ defmodule TenantPlugTest do
 
     test "calls on_missing handler when require_resolved is true" do
       conn = conn(:get, "/")
-      
+
       on_missing = fn conn ->
         conn
         |> Plug.Conn.send_resp(401, "Custom error")
         |> Plug.Conn.halt()
       end
 
-      opts = TenantPlug.init(
-        sources: [TenantPlug.Sources.FromHeader],
-        require_resolved: true,
-        on_missing: on_missing
-      )
+      opts =
+        TenantPlug.init(
+          sources: [TenantPlug.Sources.FromHeader],
+          require_resolved: true,
+          on_missing: on_missing
+        )
 
       result_conn = TenantPlug.call(conn, opts)
 
@@ -161,7 +168,7 @@ defmodule TenantPlugTest do
   describe "apply_snapshot/1" do
     test "applies valid snapshot" do
       snapshot = %{tenant: "test-tenant", key: :tenant_plug_tenant}
-      
+
       assert TenantPlug.apply_snapshot(snapshot) == :ok
       assert TenantPlug.current() == "test-tenant"
     end

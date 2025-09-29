@@ -138,8 +138,9 @@ defmodule TenantPlug.Telemetry do
     |> Map.new()
   end
 
-  defp extract_module({module, _opts}), do: module
+  defp extract_module({module, _opts}) when is_atom(module), do: module
   defp extract_module(module) when is_atom(module), do: module
+  defp extract_module(_invalid), do: :unknown_module
 
   defp development_env? do
     Mix.env() == :dev

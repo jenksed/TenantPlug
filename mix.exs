@@ -26,6 +26,7 @@ defmodule TenantPlug.MixProject do
     [
       {:plug, "~> 1.14"},
       {:telemetry, "~> 1.0"},
+      {:telemetry_test, "~> 0.1.0", only: :test},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false}
     ]
   end

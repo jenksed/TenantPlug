@@ -35,9 +35,9 @@ defmodule TenantPlug.MixProject do
     [
       name: "tenant_plug",
       files: ["lib", "mix.exs", "README*", "LICENSE*"],
-      maintainers: ["Your Name"],
+      maintainers: ["Joshua Jenks"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/elixir-multitenant/tenant_plug"}
+      links: %{"GitHub" => "https://github.com/TENVIA/tenant_plug"}
     ]
   end
 
